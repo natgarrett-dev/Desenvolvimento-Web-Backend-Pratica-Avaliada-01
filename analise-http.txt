@@ -1,0 +1,154 @@
+==============================================================
+EXERCÍCIO 2 - ANÁLISE E IMPLEMENTAÇÃO DO PROTOCOLO HTTP
+==============================================================
+--------------------------------------------------------------
+PARTE A - ANÁLISE DE REQUISIÇÃO
+--------------------------------------------------------------
+
+Requisição analisada:
+
+  POST /api/v1/usuarios HTTP/1.1
+  Host: sistema.exemplo.com
+  Content-Type: application/json
+  Authorization: Bearer eyJhbGciOi...
+  {"nome": "Maria Silva", "email": "maria@exemplo.com"}
+
+Uma requisição HTTP tem três partes: linha de requisição, cabeçalhos
+(headers) e corpo (body), separados por uma linha em branco entre os
+cabeçalhos e o corpo.
+
+1) LINHA DE REQUISIÇÃO: "POST /api/v1/usuarios HTTP/1.1"
+
+   - POST (método): indica a ação desejada. Ou seja, nesse caso pede ao servidor que
+    CRIE um novo recurso a partir dos dados enviados no corpo. Não é
+    idempotente: ao repetir a chamada pode criar usuários duplicados, caso não aja validação.
+
+   - /api/v1/usuarios (caminho/URI do recurso):
+       /api       -> prefixo que indica que é uma API
+       /v1        -> versão da API
+       /usuarios  -> a coleção (recurso) na qual o novo usuário será criado
+    Seguindo o padrão REST, usando substantivo no plural e não um verbo como "/criarUsuario".
+
+   - HTTP/1.1 (versão do protocolo): versão usada na comunicação.
+
+2) CABEÇALHOS (HEADERS)
+
+   - Host: sistema.exemplo.com
+       Domínio do servidor de destino. Obrigatório no HTTP/1.1, dado
+       permite que um mesmo IP hospede vários sites.
+
+   - Content-Type: application/json
+       Informa o formato do CORPO enviado pelo cliente. Aqui, o corpo é
+       JSON, onde o server deve interpretá-lo como tal.
+
+   - Authorization: Bearer eyJhbGciOi...
+       Credencial de autenticação. O esquema "Bearer" indica que o
+       portador (bearer) do token tem acesso. O valor "eyJhbGciOi..." é
+       típico de um JSON Web Token, pois "eyJhbGciOi" é o início
+       do cabeçalho {"alg": ... } codificado em Base64. O servidor valida
+       a assinatura e a validade do token antes de processar o pedido.
+       Sem esse token válido, a resposta deve ser 401 Unauthorized.
+
+3) CORPO (BODY)
+
+   {"nome": "Maria Silva", "email": "maria@exemplo.com"}
+
+   Os dados do novo usuário, em JSON. Contém dois campos: "nome" e
+   "email". O servidor deve validar o formato (e-mail válido, nome não
+   vazio) e também validar regras de negócio (e-mail já está cadastrado?).
+   Obs: não há "id" no corpo, pois ele é gerado pelo servidor.
+
+Resposta esperada em caso de sucesso:
+
+  HTTP/1.1 201 Created
+  Location: /api/v1/usuarios/1
+  Content-Type: application/json
+
+  {"id": 1, "nome": "Maria Silva", "email": "maria@exemplo.com"}
+
+--------------------------------------------------------------
+PARTE B - CÓDIGOS DE STATUS
+--------------------------------------------------------------
+
+  Situação                        Código  Justificativa
+  ------------------------------  ------  ------------------------------------------
+  Usuário criado com sucesso      201     Created. Indica que um novo recurso foi
+                                          criado. Mais preciso que 200 OK.                                          
+
+  Recurso não encontrado          404     Not Found. O server não encontrou o
+                                          recurso solicitado (por exemplo: GET /usuarios/999
+                                          e o usuário 999 não existe).
+
+  Falha na autenticação           401     Unauthorized. As credenciais estão
+                                          ausentes, inválidas ou expiradas (por exemplo.:
+                                          token JWT inválido). Não confundir com
+                                          403 Forbidden, que significa autenticado
+                                          mas sem permissão.
+
+  Dados inválidos                 400     Bad Request. A requisição está mal
+                                          formada ou os dados são inválidos. Em
+                                          APIs que validam o conteúdo semântico, 
+                                          o código 422 Unprocessable Entity também é
+                                          apropriado e muito utilizado.
+
+  Erro interno do servidor        500     Internal Server Error. Falha inesperada
+                                          no servidor (exceção não tratada, banco
+                                          indisponível). A culpa não é do cliente.
+
+--------------------------------------------------------------
+PARTE C - MÉTODOS HTTP
+--------------------------------------------------------------
+
+Cada método expressa a INTENÇÃO da operação sobre um recurso.
+
+GET - LER / CONSULTAR
+  Quando usar: obter um recurso ou uma lista de recursos, sem
+  alterar nada no servidor. É seguro (não modifica dados).
+  Não deve ter corpo.
+
+  Exemplo:
+    GET /api/v1/usuarios/1 HTTP/1.1
+    -> 200 OK  {"id": 1, "nome": "Maria Silva", "email": "maria@exemplo.com"}
+
+POST - CRIAR
+  Quando usar: para criar um novo recurso em uma coleção, ou para
+  disparar uma ação/processamento.
+  O servidor define o id.
+  
+  Exemplo:
+    POST /api/v1/usuarios HTTP/1.1
+    Content-Type: application/json
+
+    {"nome": "Nathan Garrett", "email": "knvzin7@exemplo.com"}
+    -> 201 Created
+
+PUT - SUBSTITUIR / ATUALIZAR POR COMPLETO
+  Quando usar: para substituir TODO o recurso por uma nova representação
+  (o cliente envia todos os campos). É idempotente: enviar a mesma
+  requisição várias vezes resulta no mesmo estado final. 
+  (Para atualização parcial, o método mais adequado é o PATCH.)
+  
+  Exemplo:
+    PUT /api/v1/usuarios/1 HTTP/1.1
+    Content-Type: application/json
+
+    {"nome": "Maria S. Oliveira", "email": "maria.oliveira@exemplo.com"}
+    -> 200 OK
+
+DELETE - REMOVER
+  Quando usar: para excluir um recurso. É idempotente: apagar duas vezes
+  resulta no mesmo estado final (o recurso não existe), embora a segunda
+  chamada possa retornar 404.
+  
+  Exemplo:
+    DELETE /api/v1/usuarios/1 HTTP/1.1
+    -> 204 No Content
+
+  Resumo das propriedades:
+
+  Método   Seguro   Idempotente   Tem corpo na requisição
+  -------  -------  ------------  ------------------------
+  GET      sim      sim           não
+  POST     não      não           sim
+  PUT      não      sim           sim
+  DELETE   não      sim           normalmente não
